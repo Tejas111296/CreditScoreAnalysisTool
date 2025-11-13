@@ -113,6 +113,18 @@ CreditScoreAnalysisTool
 
 ---
 
+## ⚠️ Current Status
+
+This project is a **work in progress**.
+
+- ✅ Docker Compose spins up all services (gateway, user service, credit service, Kafka, Redis, MySQL)
+- ✅ User registration is working
+- ✅ Actuator health checks are working through the gateway
+- ⚠️ `/users/login` endpoint is under active debugging (returns 500 in the current version)
+- 🔜 Next steps: finalize JWT auth flow and secure credit APIs end-to-end
+
+---
+
 ## 👤 Author
 
 **Tejas Tondase**  
