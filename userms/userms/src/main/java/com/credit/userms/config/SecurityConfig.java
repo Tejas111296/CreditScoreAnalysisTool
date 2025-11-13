@@ -31,7 +31,7 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)  // No session will be created or used by Spring Security.
             .and()
             .authorizeRequests()  // Allow configuring authorization requests.
-                .requestMatchers("/login", "/register").permitAll()  // Allow everyone to access login and register endpoints.
+                 .requestMatchers("/login", "/register", "/users/**").permitAll()  // Allow everyone to access login and register endpoints.
                 .anyRequest().authenticated()  // All other requests must be authenticated.
             .and()
             .oauth2Login()  // Enable OAuth2 login functionality.

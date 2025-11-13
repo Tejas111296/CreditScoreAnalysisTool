@@ -1,0 +1,100 @@
+services:
+  mysql-userms:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      MYSQL_DATABASE: userms
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-prootpw"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mysql-credit:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      MYSQL_DATABASE: credit
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-prootpw"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+
+  kafka:
+    image: docker.redpanda.com/redpanda/redpanda:latest
+    command: >
+      start --overprovisioned --smp 1 --memory 1G --mode dev-container
+      --kafka-addr 0.0.0.0:9092 --advertise-kafka-addr kafka:9092
+    ports:
+      - "9092:9092"
+
+  user-management-service:
+    build:
+      context: ./userms/userms
+      dockerfile: Dockerfile
+    depends_on:
+      mysql-userms:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-userms:3306/userms?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpw
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+
+  credit:
+    build:
+      context: ./credit/credit
+      dockerfile: Dockerfile
+    depends_on:
+      mysql-credit:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_started
+      user-management-service:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-credit:3306/credit?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpw
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_MAIL_HOST: smtp.gmail.com
+      SPRING_MAIL_PORT: 587
+      SPRING_MAIL_USERNAME: dummy@example.com
+      SPRING_MAIL_PASSWORD: dummy-app-password
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
+
+  cloudgateway:
+    build:
+      context: ./cloudgateway/cloudgateway
+      dockerfile: Dockerfile
+    depends_on:
+      user-management-service:
+        condition: service_started
+      credit:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8080
+      SPRING_CLOUD_GATEWAY_ROUTES_0_ID: users
+      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://user-management-service:8081
+      SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0: Path=/api/users/**
+      SPRING_CLOUD_GATEWAY_ROUTES_0_FILTERS_0: "RewritePath=/api/users/(?<segment>.*), /users/$${segment}"
+      SPRING_CLOUD_GATEWAY_ROUTES_1_ID: credit
+      SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://credit:8082
+      SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0: Path=/api/credit/**
+      SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0: "RewritePath=/api/credit/(?<segment>.*), /score/$${segment}"
+    ports:
+      - "8080:8080"
